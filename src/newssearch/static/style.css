@@ -1,0 +1,59 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #595959;
+  --accent: #0b57d0;
+  --border: #c7c7c7;
+  --mark: #fff1a8;
+  --bar: #0b57d0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212;
+    --fg: #ececec;
+    --muted: #b3b3b3;
+    --accent: #8ab4f8;
+    --border: #444;
+    --mark: #5c4d00;
+    --bar: #8ab4f8;
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0 auto; max-width: 52rem; padding: 1.5rem 1rem 4rem; background: var(--bg); color: var(--fg); line-height: 1.5; }
+h1 { margin: 0; font-size: 1.75rem; }
+h2 { font-size: 1rem; margin: 1.5rem 0 .5rem; }
+.tagline, .hint, figcaption, #status, .meta { color: var(--muted); font-size: .9rem; }
+.hint { margin: .25rem 0 0; }
+
+.skip-link { position: absolute; left: -999px; }
+.skip-link:focus { left: 1rem; top: 1rem; background: var(--bg); padding: .5rem; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+form { display: grid; gap: .75rem; margin-top: 1.25rem; }
+.combo { position: relative; }
+label { font-weight: 600; font-size: .9rem; }
+input { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: .55rem .7rem; }
+#q { display: block; width: 100%; margin-top: .25rem; }
+.dates { display: flex; flex-wrap: wrap; gap: 1rem; }
+.dates input { margin-left: .35rem; }
+button { font: inherit; padding: .55rem 1.1rem; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--bg); cursor: pointer; justify-self: start; }
+button[disabled] { opacity: .4; cursor: default; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+#suggestions { position: absolute; z-index: 1; left: 0; right: 0; margin: 2px 0 0; padding: 0; list-style: none; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+#suggestions li { padding: .4rem .7rem; cursor: pointer; }
+#suggestions li[aria-selected="true"], #suggestions li:hover { background: var(--accent); color: var(--bg); }
+
+figure { margin: 0; }
+#timeline { width: 100%; height: 80px; display: block; }
+#timeline rect { fill: var(--bar); }
+
+#hits { padding-left: 1.5rem; }
+#hits li { margin-bottom: .9rem; }
+.title { font-size: 1.02rem; }
+mark { background: var(--mark); color: inherit; padding: 0 .1em; }
+#pager { display: flex; gap: .75rem; }

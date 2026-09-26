@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Oil News Search</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#results">Skip to results</a>
+  <header>
+    <h1>Oil News Search</h1>
+    <p class="tagline" id="corpus-stats">Full-text search over GDELT oil-market headlines.</p>
+  </header>
+
+  <main>
+    <form id="search-form" role="search" autocomplete="off">
+      <div class="combo">
+        <label for="q">Search headlines</label>
+        <input id="q" name="q" type="search" required maxlength="200"
+               placeholder="e.g. hormuz tanker attack"
+               role="combobox" aria-autocomplete="list" aria-expanded="false"
+               aria-controls="suggestions" aria-describedby="q-help">
+        <ul id="suggestions" role="listbox" aria-label="Suggested terms" hidden></ul>
+        <p id="q-help" class="hint">Use the arrow keys to pick a suggestion.</p>
+      </div>
+      <div class="dates">
+        <label>From <input id="start" name="start" type="date"></label>
+        <label>To <input id="end" name="end" type="date"></label>
+      </div>
+      <button type="submit">Search</button>
+    </form>
+
+    <section aria-labelledby="timeline-heading" id="timeline-section" hidden>
+      <h2 id="timeline-heading">Matches per month</h2>
+      <figure>
+        <svg id="timeline" role="img" aria-labelledby="timeline-title" preserveAspectRatio="none">
+          <title id="timeline-title">Monthly headline counts</title>
+        </svg>
+        <figcaption id="timeline-caption"></figcaption>
+      </figure>
+    </section>
+
+    <section id="results" aria-labelledby="results-heading" tabindex="-1">
+      <h2 id="results-heading" class="visually-hidden">Results</h2>
+      <p id="status" role="status" aria-live="polite"></p>
+      <ol id="hits"></ol>
+      <nav id="pager" aria-label="Result pages" hidden>
+        <button type="button" id="prev">Previous</button>
+        <button type="button" id="next">Next</button>
+      </nav>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
