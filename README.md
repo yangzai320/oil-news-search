@@ -5,7 +5,9 @@ scratch: an inverted index in compressed-sparse-row form, BM25 ranking, time-ord
 ids for O(log n) date filtering, and prefix autocomplete over a sorted vocabulary. Served by
 FastAPI with an accessible web UI, packaged for Cloud Run.
 
-<!-- BENCHMARKS: fill in from bench/results after indexing the real corpus -->
+> **Status:** engine, API, UI, and tests are complete. Latency and throughput numbers on the
+> full GDELT corpus will be added here once indexing finishes; the benchmark scripts are in
+> [`bench/`](bench/).
 
 ## How it works
 
