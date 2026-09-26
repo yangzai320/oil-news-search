@@ -20,6 +20,7 @@ class Hit:
     score: float
     ts: int
     title: str
+    url: str
 
 
 @dataclass
@@ -114,6 +115,7 @@ class SearchEngine:
                 score=round(float(scores[i]), 4),
                 ts=int(self.index.doc_ts[docs[i]]),
                 title=self.index.title(int(docs[i])),
+                url=self.index.url(int(docs[i])),
             )
             for i in cand
         )
@@ -156,19 +158,30 @@ class SearchEngine:
         best = np.argsort(-df, kind="stable")[:limit]
         return [vocab[lo + int(i)] for i in best]
 
-    def timeline(self, query: str, start_ts: int | None = None, end_ts: int | None = None) -> list[dict]:
-        """Monthly counts of matching headlines, for the results sparkline."""
+    def timeline(self, query: str, start_ts: int | None = None, end_ts: int | None = None) -> dict:
+        """Matching-headline counts per day (spans up to ~6 months) or per month."""
         terms = tuple(dict.fromkeys(tokenize(query)))
         lo, hi = self.doc_range(start_ts, end_ts)
-        return list(self._timeline(terms, lo, hi))
+        granularity, buckets = self._timeline(terms, lo, hi)
+        return {"granularity": granularity, "buckets": list(buckets)}
 
-    def _compute_timeline(self, terms: tuple[str, ...], lo: int, hi: int) -> tuple[dict, ...]:
+    def _compute_timeline(self, terms: tuple[str, ...], lo: int, hi: int) -> tuple[str, tuple[dict, ...]]:
+        if hi <= lo:
+            return "day", ()
+        # Pick the unit from the searched window, not the matches, so charts are comparable.
+        span_days = (int(self.index.doc_ts[hi - 1]) - int(self.index.doc_ts[lo])) / 86_400
+        granularity, unit = ("day", "D") if span_days <= 183 else ("month", "M")
         docs, _ = self._rank(terms, lo, hi)
         if len(docs) == 0:
-            return ()
-        months = np.asarray(self.index.doc_ts[docs], dtype="datetime64[s]").astype("datetime64[M]")
-        uniq, counts = np.unique(months, return_counts=True)
-        return tuple({"month": str(m), "count": int(c)} for m, c in zip(uniq, counts, strict=True))
+            return granularity, ()
+
+        periods = np.asarray(self.index.doc_ts[docs], dtype="datetime64[s]").astype(f"datetime64[{unit}]")
+        periods.sort()
+        # Emit every period between the first and last match, including empty ones,
+        # so bars sit at their true positions on the time axis.
+        axis = np.arange(periods[0], periods[-1] + 1)
+        counts = np.searchsorted(periods, axis, side="right") - np.searchsorted(periods, axis, side="left")
+        return granularity, tuple({"period": str(p), "count": int(c)} for p, c in zip(axis, counts, strict=True))
 
     def cache_info(self):
         return self._page.cache_info()

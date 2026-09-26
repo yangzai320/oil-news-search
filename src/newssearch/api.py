@@ -85,6 +85,7 @@ def search(
                 "score": h.score,
                 "published": datetime.fromtimestamp(h.ts, tz=UTC).isoformat(),
                 "title": h.title,
+                "url": h.url,
             }
             for h in result.hits
         ],
@@ -106,4 +107,4 @@ def timeline(
     end: date | None = None,
 ):
     _check_range(start, end)
-    return {"query": q, "months": get_engine().timeline(q, start_ts=_to_ts(start), end_ts=_to_ts(end))}
+    return {"query": q, **get_engine().timeline(q, start_ts=_to_ts(start), end_ts=_to_ts(end))}

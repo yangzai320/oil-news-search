@@ -14,6 +14,7 @@ from .index import build_index, save_index
 
 TIME_COLUMNS = ("news_time", "published_utc", "timestamp")
 TITLE_COLUMNS = ("title", "title_clean")
+URL_COLUMNS = ("url", "DocumentIdentifier")
 
 
 def _parse_ts(value: str) -> int | None:
@@ -31,7 +32,7 @@ def _parse_ts(value: str) -> int | None:
     return int(parsed.timestamp())
 
 
-def read_records(paths: list[Path]) -> Iterator[tuple[int, str]]:
+def read_records(paths: list[Path]) -> Iterator[tuple[int, str, str]]:
     csv.field_size_limit(sys.maxsize)
     for path in paths:
         delimiter = "\t" if path.suffix == ".tsv" else ","
@@ -39,13 +40,15 @@ def read_records(paths: list[Path]) -> Iterator[tuple[int, str]]:
             reader = csv.DictReader(f, delimiter=delimiter)
             time_col = next((c for c in TIME_COLUMNS if c in reader.fieldnames), None)
             title_col = next((c for c in TITLE_COLUMNS if c in reader.fieldnames), None)
+            url_col = next((c for c in URL_COLUMNS if c in reader.fieldnames), None)
             if time_col is None or title_col is None:
                 raise SystemExit(f"{path}: need one of {TIME_COLUMNS} and one of {TITLE_COLUMNS}")
             for row in reader:
                 ts = _parse_ts(row[time_col] or "")
                 title = row[title_col] or ""
+                url = (row[url_col] or "") if url_col else ""
                 if ts is not None and len(title.strip()) >= 10:
-                    yield ts, title
+                    yield ts, title, url
 
 
 def main(argv: list[str] | None = None) -> None:

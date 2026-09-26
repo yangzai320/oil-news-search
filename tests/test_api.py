@@ -11,7 +11,7 @@ T0 = 1_767_225_600  # 2026-01-01 UTC
 @pytest.fixture
 def client():
     records = [
-        (T0, "Oil prices jump after tanker attack near Strait of Hormuz"),
+        (T0, "Oil prices jump after tanker attack near Strait of Hormuz", "https://example.com/oil"),
         (T0 + 40 * 86_400, "Crude inventories fall for third week, EIA says"),
         (T0 + 41 * 86_400, "Oil slips as ceasefire talks resume"),
     ]
@@ -24,6 +24,7 @@ def test_search_returns_ranked_hits(client):
     assert body["total"] == 2
     assert body["hits"][0]["title"].startswith("Oil prices jump")
     assert body["hits"][0]["published"] == "2026-01-01T00:00:00+00:00"
+    assert body["hits"][0]["url"] == "https://example.com/oil"
     assert body["took_ms"] >= 0
 
 
@@ -48,8 +49,12 @@ def test_search_validates_input(client, params):
 
 def test_suggest_and_timeline(client):
     assert client.get("/api/suggest", params={"prefix": "tan"}).json()["suggestions"] == ["tanker"]
-    months = client.get("/api/timeline", params={"q": "oil"}).json()["months"]
-    assert months == [{"month": "2026-01", "count": 1}, {"month": "2026-02", "count": 1}]
+    body = client.get("/api/timeline", params={"q": "oil"}).json()
+    assert body["granularity"] == "day"
+    buckets = body["buckets"]
+    assert len(buckets) == 42  # 2026-01-01 .. 2026-02-11, empty days included
+    assert (buckets[0], buckets[-1]) == ({"period": "2026-01-01", "count": 1}, {"period": "2026-02-11", "count": 1})
+    assert sum(b["count"] for b in buckets) == 2
 
 
 def test_home_page_and_health(client):

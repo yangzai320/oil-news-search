@@ -5,9 +5,21 @@ scratch: an inverted index in compressed-sparse-row form, BM25 ranking, time-ord
 ids for O(log n) date filtering, and prefix autocomplete over a sorted vocabulary. Served by
 FastAPI with an accessible web UI, packaged for Cloud Run.
 
-> **Status:** engine, API, UI, and tests are complete. Latency and throughput numbers on the
-> full GDELT corpus will be added here once indexing finishes; the benchmark scripts are in
-> [`bench/`](bench/).
+## Performance
+
+Corpus: **209,936** unique oil-market headlines (210,848 raw GDELT records, 2026-02-15 → 2026-04-26),
+46,621 terms, 2.1M postings. Index builds in **4.3 s** and loads in **11 ms** (mmap).
+Measured on an Apple M3 Pro laptop with the result cache **disabled**, using query logs sampled
+from the corpus (1–3 keywords per query). Load generator and server share the same machine.
+
+| Benchmark | Throughput | p50 | p95 | p99 | Errors |
+|---|---:|---:|---:|---:|---:|
+| Engine only, 1 thread (5,000 queries) | 2,589 QPS | 0.15 ms | 1.7 ms | 2.5 ms | – |
+| HTTP, 4 workers, 8 concurrent users (30 s) | 4,417 search QPS | 1 ms | 4 ms | 5 ms | 0 / 164,553 |
+| HTTP, 4 workers, 64 concurrent users (60 s) | 3,715 search QPS | 14 ms | 26 ms | 32 ms | 0 / 277,702 |
+
+At 64 users the laptop is CPU-saturated (Locust competes with the server), so latency is
+queueing time, not search time. Reproduce with the commands under [Run it](#run-it).
 
 ## How it works
 

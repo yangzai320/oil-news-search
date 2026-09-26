@@ -80,8 +80,31 @@ def test_suggest_orders_by_document_frequency(engine):
     assert engine.suggest("qqq") == []
 
 
-def test_timeline_counts_by_month(engine):
-    assert engine.timeline("oil") == [{"month": "2026-01", "count": 3}]
+def test_timeline_counts_by_day_for_short_spans(engine):
+    t = engine.timeline("oil")
+    assert t["granularity"] == "day"
+    assert [b["count"] for b in t["buckets"]] == [1, 0, 0, 1, 0, 1]  # Jan 1, 4, 6
+
+
+def test_timeline_switches_to_months_for_long_spans():
+    records = [(T0, "Oil rallies on supply fears"), (T0 + 400 * DAY, "Oil slides as demand cools")]
+    t = SearchEngine(build_index(records)).timeline("oil")
+    assert t["granularity"] == "month"
+    assert len(t["buckets"]) == 14 and t["buckets"][0] == {"period": "2026-01", "count": 1}
+
+
+def test_urls_follow_their_documents(tmp_path):
+    records = [
+        (T0 + 5, "Brent climbs on Red Sea shipping risk", "https://example.com/b"),
+        (T0 + 1, "OPEC holds output steady at meeting", "https://example.com/a"),
+        (T0 + 9, "Brent Climbs On Red Sea Shipping Risk!", "https://example.com/dup"),  # later copy
+    ]
+    index = build_index(records)
+    save_index(index, tmp_path)
+    loaded = load_index(tmp_path)
+    assert [loaded.url(d) for d in range(loaded.num_docs)] == ["https://example.com/a", "https://example.com/b"]
+    hit = SearchEngine(loaded).search("brent").hits[0]
+    assert (hit.title, hit.url) == ("Brent climbs on Red Sea shipping risk", "https://example.com/b")
 
 
 def test_index_round_trips_through_disk(tmp_path, engine):

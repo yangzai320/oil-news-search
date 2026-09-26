@@ -27,6 +27,16 @@ async function getJSON(url) {
   return res.json();
 }
 
+// Only link out to http(s) URLs; anything else (javascript:, data:, garbage) renders as plain text.
+function safeUrl(raw) {
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" || url.protocol === "http:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 // Build highlighted text with DOM nodes (never innerHTML) so headlines cannot inject markup.
 function highlight(text, terms) {
   const frag = document.createDocumentFragment();
@@ -74,13 +84,25 @@ function renderHits(data) {
     const li = document.createElement("li");
     const title = document.createElement("div");
     title.className = "title";
-    title.append(highlight(hit.title, data.terms));
+    const link = safeUrl(hit.url);
+    if (link) {
+      const a = document.createElement("a");
+      a.href = link.href;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.append(highlight(hit.title, data.terms));
+      title.append(a);
+    } else {
+      title.append(highlight(hit.title, data.terms));
+    }
     const meta = document.createElement("div");
     meta.className = "meta";
     const time = document.createElement("time");
     time.dateTime = hit.published;
     time.textContent = new Date(hit.published).toUTCString().replace(" GMT", " UTC");
-    meta.append(time, ` · score ${hit.score.toFixed(2)}`);
+    meta.append(time);
+    if (link) meta.append(` · ${link.hostname.replace(/^www\./, "")}`);
+    meta.append(` · score ${hit.score.toFixed(2)}`);
     li.append(title, meta);
     hitsEl.append(li);
   }
@@ -91,7 +113,9 @@ function renderHits(data) {
 
 function renderTimeline(data) {
   const svg = $("timeline");
-  const months = data.months;
+  const months = data.buckets;
+  const unit = data.granularity;
+  $("timeline-heading").textContent = `Matches per ${unit}`;
   $("timeline-section").hidden = months.length < 2;
   svg.querySelectorAll("rect").forEach((r) => r.remove());
   if (months.length < 2) return;
@@ -109,14 +133,14 @@ function renderTimeline(data) {
     rect.setAttribute("width", Math.max(1, bw - 2));
     rect.setAttribute("height", bh);
     const tip = document.createElementNS("http://www.w3.org/2000/svg", "title");
-    tip.textContent = `${m.month}: ${m.count}`;
+    tip.textContent = `${m.period}: ${m.count}`;
     rect.append(tip);
     svg.append(rect);
   });
   const peak = months.reduce((a, b) => (b.count > a.count ? b : a));
-  const caption = `${months[0].month} to ${months.at(-1).month}; peak ${peak.count.toLocaleString()} in ${peak.month}.`;
+  const caption = `${months[0].period} to ${months.at(-1).period}; peak ${peak.count.toLocaleString()} on ${peak.period}.`;
   $("timeline-caption").textContent = caption;
-  $("timeline-title").textContent = `Monthly headline counts, ${caption}`;
+  $("timeline-title").textContent = `Headline counts per ${unit}, ${caption}`;
 }
 
 // ---------- autocomplete (WAI-ARIA combobox pattern) ----------

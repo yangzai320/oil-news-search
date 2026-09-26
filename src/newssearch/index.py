@@ -10,6 +10,8 @@ On-disk layout (one directory):
     doc_ts.npy        int64[N]    publish time (unix seconds), ascending
     title_offsets.npy int64[N+1]  byte ranges into titles.bin
     titles.bin        UTF-8 headlines, concatenated
+    url_offsets.npy   int64[N+1]  byte ranges into urls.bin (empty string if unknown)
+    urls.bin          UTF-8 article URLs, concatenated
     meta.json         corpus statistics
 
 Doc ids are assigned in publish-time order, so a date range is a contiguous id range.
@@ -27,6 +29,9 @@ import numpy as np
 
 from .text import normalize_title, tokenize
 
+# (unix_seconds, title) or (unix_seconds, title, url)
+Record = tuple[int, str] | tuple[int, str, str]
+
 
 @dataclass(frozen=True)
 class Index:
@@ -38,6 +43,8 @@ class Index:
     doc_ts: np.ndarray
     title_offsets: np.ndarray
     titles: np.ndarray
+    url_offsets: np.ndarray
+    urls: np.ndarray
     meta: dict
 
     @property
@@ -45,33 +52,46 @@ class Index:
         return len(self.doc_len)
 
     def title(self, doc: int) -> str:
-        start, end = self.title_offsets[doc], self.title_offsets[doc + 1]
-        return bytes(self.titles[start:end]).decode("utf-8")
+        return _unpack(self.titles, self.title_offsets, doc)
+
+    def url(self, doc: int) -> str:
+        return _unpack(self.urls, self.url_offsets, doc)
 
 
-def build_index(records: Iterable[tuple[int, str]], source: str = "") -> Index:
-    """Build an index from ``(unix_seconds, title)`` pairs.
+def _pack(strings: list[str]) -> tuple[np.ndarray, np.ndarray]:
+    encoded = [s.encode("utf-8") for s in strings]
+    offsets = np.zeros(len(encoded) + 1, dtype=np.int64)
+    np.cumsum([len(b) for b in encoded], out=offsets[1:])
+    return offsets, np.frombuffer(b"".join(encoded), dtype=np.uint8)
+
+
+def _unpack(blob: np.ndarray, offsets: np.ndarray, doc: int) -> str:
+    return bytes(blob[offsets[doc] : offsets[doc + 1]]).decode("utf-8")
+
+
+def build_index(records: Iterable[Record], source: str = "") -> Index:
+    """Build an index from ``(unix_seconds, title[, url])`` records.
 
     Syndicated copies (same normalized title) collapse to the earliest one.
     """
     started = time.perf_counter()
-    earliest: dict[str, tuple[int, str]] = {}
+    earliest: dict[str, tuple[int, str, str]] = {}
     seen = 0
-    for ts, title in records:
+    for ts, title, *rest in records:
         seen += 1
         title = title.strip()
         key = normalize_title(title)
         if not key:
             continue
         if key not in earliest or ts < earliest[key][0]:
-            earliest[key] = (ts, title)
+            earliest[key] = (ts, title, rest[0].strip() if rest else "")
 
     docs = sorted(earliest.values())  # by timestamp, then title
     term_ids: dict[str, int] = {}
     post_term, post_doc, post_tf = [], [], []
     doc_len = np.zeros(len(docs), dtype=np.uint16)
 
-    for doc_id, (_, title) in enumerate(docs):
+    for doc_id, (_, title, _) in enumerate(docs):
         tokens = tokenize(title)
         doc_len[doc_id] = min(len(tokens), np.iinfo(np.uint16).max)
         for term, tf in Counter(tokens).items():
@@ -92,9 +112,8 @@ def build_index(records: Iterable[tuple[int, str]], source: str = "") -> Index:
     offsets = np.zeros(len(vocab) + 1, dtype=np.int64)
     np.cumsum(np.bincount(term_arr, minlength=len(vocab)), out=offsets[1:])
 
-    encoded = [title.encode("utf-8") for _, title in docs]
-    title_offsets = np.zeros(len(docs) + 1, dtype=np.int64)
-    np.cumsum([len(b) for b in encoded], out=title_offsets[1:])
+    title_offsets, titles = _pack([title for _, title, _ in docs])
+    url_offsets, urls = _pack([url for _, _, url in docs])
 
     meta = {
         "source": source,
@@ -113,14 +132,17 @@ def build_index(records: Iterable[tuple[int, str]], source: str = "") -> Index:
         postings=doc_arr[order],
         tfs=tf_arr[order],
         doc_len=doc_len,
-        doc_ts=np.asarray([ts for ts, _ in docs], dtype=np.int64),
+        doc_ts=np.asarray([ts for ts, _, _ in docs], dtype=np.int64),
         title_offsets=title_offsets,
-        titles=np.frombuffer(b"".join(encoded), dtype=np.uint8),
+        titles=titles,
+        url_offsets=url_offsets,
+        urls=urls,
         meta=meta,
     )
 
 
-_ARRAYS = ["offsets", "postings", "tfs", "doc_len", "doc_ts", "title_offsets"]
+_ARRAYS = ["offsets", "postings", "tfs", "doc_len", "doc_ts", "title_offsets", "url_offsets"]
+_BLOBS = ["titles", "urls"]
 
 
 def save_index(index: Index, directory: str | Path) -> None:
@@ -129,19 +151,22 @@ def save_index(index: Index, directory: str | Path) -> None:
     (path / "vocab.txt").write_text("\n".join(index.vocab), encoding="utf-8")
     for name in _ARRAYS:
         np.save(path / f"{name}.npy", getattr(index, name))
-    index.titles.tofile(path / "titles.bin")
+    for name in _BLOBS:
+        getattr(index, name).tofile(path / f"{name}.bin")
     (path / "meta.json").write_text(json.dumps(index.meta, indent=2))
+
+
+def _load_blob(path: Path) -> np.ndarray:
+    # np.memmap refuses empty files.
+    return np.memmap(path, dtype=np.uint8, mode="r") if path.stat().st_size else np.zeros(0, np.uint8)
 
 
 def load_index(directory: str | Path) -> Index:
     path = Path(directory)
     vocab_text = (path / "vocab.txt").read_text(encoding="utf-8")
-    arrays = {name: np.load(path / f"{name}.npy", mmap_mode="r") for name in _ARRAYS}
-    titles_path = path / "titles.bin"
-    titles = np.memmap(titles_path, dtype=np.uint8, mode="r") if titles_path.stat().st_size else np.zeros(0, np.uint8)
     return Index(
         vocab=vocab_text.split("\n") if vocab_text else [],
-        titles=titles,
         meta=json.loads((path / "meta.json").read_text()),
-        **arrays,
+        **{name: np.load(path / f"{name}.npy", mmap_mode="r") for name in _ARRAYS},
+        **{name: _load_blob(path / f"{name}.bin") for name in _BLOBS},
     )
