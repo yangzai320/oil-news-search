@@ -98,8 +98,11 @@ class SearchEngine:
         docs, scores = self._rank(terms, lo, hi)
         top = min(offset + k, len(docs))
         if top < len(docs):
-            # Top-k selection in O(n) instead of sorting every match.
-            cand = np.argpartition(-scores, top - 1)[:top]
+            # Top-k selection in O(n) instead of sorting every match. argpartition picks
+            # an arbitrary subset of docs tied at the k-th score, so keep every doc at or
+            # above that score and let the sort below apply the tie-break.
+            kth = np.partition(scores, len(scores) - top)[len(scores) - top]
+            cand = np.flatnonzero(scores >= kth)
         else:
             cand = np.arange(len(docs))
         # Highest score first; ties go to the newer headline (larger doc id).

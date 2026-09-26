@@ -57,6 +57,16 @@ def test_pagination_is_consistent(engine):
     assert paged == full
 
 
+def test_ties_break_toward_newest_on_every_page():
+    # 60 equally scored headlines: selection must not depend on argpartition's tie order.
+    records = [(T0 + i, f"Oil update number{i:03d}") for i in range(60)]
+    engine = SearchEngine(build_index(records))
+    newest_first = list(range(59, -1, -1))
+    for k in (1, 7, 10):
+        paged = [h.doc for off in range(0, 60, k) for h in engine.search("oil", k=k, offset=off).hits]
+        assert paged == newest_first
+
+
 def test_unknown_terms_are_reported(engine):
     res = engine.search("oil zzzqx")
     assert res.unknown_terms == ["zzzqx"]
